@@ -82,6 +82,8 @@
   .card .ava{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:900;font-size:13px;background:var(--ac,var(--coral));}
   .card .nm{font-weight:800;font-size:14px;}
   .card .nm small{display:block;font-weight:600;color:#9a90ad;font-size:11px;}
+  .card .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;}
+  .card .tag{font-size:11px;font-weight:800;background:rgba(0,0,0,.055);color:#5a5168;padding:4px 9px;border-radius:999px;}
 
   .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;gap:14px;padding:24px;}
   .empty .big{font-size:clamp(26px,4vw,54px);font-weight:900;letter-spacing:-1px;line-height:1.05;text-shadow:0 4px 20px rgba(0,0,0,.3);}
@@ -128,6 +130,13 @@
   .field textarea:focus,.field input:focus{outline:none;border-color:var(--coral);background:#fff;}
   .field.bad textarea,.field.bad input{border-color:#ff5470;background:#fff5f6;animation:shake .4s;}
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+  .choice{display:flex;gap:10px;}
+  .pill-opt{flex:1;cursor:pointer;border:2px solid #ece6f4;background:#fbf9ff;border-radius:15px;padding:13px 10px;font:inherit;font-size:15px;font-weight:800;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:8px;transition:border-color .12s, background .12s, box-shadow .12s;}
+  .pill-opt:hover{border-color:#FFC9BB;}
+  .pill-opt.sel{border-color:var(--coral);background:#FFF1EA;color:#E0431F;box-shadow:0 6px 16px rgba(255,90,54,.18);}
+  .pill-opt .emo{font-size:20px;}
+  .field.bad .choice{animation:shake .4s;}
+  .field.bad .pill-opt{border-color:#ff5470;}
   .send{
     width:100%; border:none; cursor:pointer; color:#fff; font-weight:900; font-size:19px; padding:16px; border-radius:16px;
     background:linear-gradient(135deg,var(--coral),var(--orange)); box-shadow:0 10px 26px rgba(255,90,54,.45);
@@ -204,6 +213,20 @@
         <label>💡 What could be better? <span class="hint">optional, but gold for us</span></label>
         <textarea id="improve" placeholder="e.g. I'd love to re-record before it posts…"></textarea>
       </div>
+      <div class="field" id="f-phone">
+        <label>📱 Which phone did you use?</label>
+        <div class="choice" id="c-phone">
+          <button type="button" class="pill-opt" data-val="iPhone"><span class="emo">📱</span>iPhone</button>
+          <button type="button" class="pill-opt" data-val="Android"><span class="emo">🤖</span>Android</button>
+        </div>
+      </div>
+      <div class="field" id="f-option">
+        <label>🎬 How did you add the video?</label>
+        <div class="choice" id="c-option">
+          <button type="button" class="pill-opt" data-val="Upload video"><span class="emo">⬆️</span>Upload video</button>
+          <button type="button" class="pill-opt" data-val="Take video"><span class="emo">🎥</span>Take video</button>
+        </div>
+      </div>
       <div class="field" id="f-name">
         <label>🙋 Your name <span class="hint">or a fun alias!</span></label>
         <input id="name" maxlength="40" placeholder="e.g. Sam the Sceptic" />
@@ -251,7 +274,7 @@
     if(API){
       // POST as text/plain -> no CORS preflight; fire-and-forget, optimistic UI
       try{
-        fetch(API,{method:'POST',body:JSON.stringify({action:'add',loved:rec.loved,improve:rec.improve,name:rec.name})});
+        fetch(API,{method:'POST',body:JSON.stringify({action:'add',loved:rec.loved,improve:rec.improve,name:rec.name,phone:rec.phone,option:rec.option})});
       }catch(e){}
       items.unshift(rec); render(true);
     }else{
@@ -295,15 +318,24 @@
     var rot = ((Math.abs(hash(String(it.ts)+idx)) % 60)/10 - 3).toFixed(2);
     var wish = (it.improve && it.improve.trim())
       ? '<div class="wish"><b>💡 wish:</b> '+esc(it.improve)+'</div>' : '';
+    var tags = '';
+    if((it.phone && it.phone.trim()) || (it.option && it.option.trim())){
+      tags = '<div class="tags">'
+        + (it.phone ? '<span class="tag">'+esc(tagLabel(it.phone))+'</span>' : '')
+        + (it.option ? '<span class="tag">'+esc(tagLabel(it.option))+'</span>' : '')
+        + '</div>';
+    }
     return '<div class="card'+(isNew?' enter':'')+'" style="--ac:'+a.ac+';--rot:'+rot+'deg;background:'+a.bg+'">'
       + '<div class="accent"></div>'
       + '<div class="loved"><span class="q">&ldquo;</span>'+esc(it.loved)+'</div>'
       + wish
       + '<div class="who"><div class="ava">'+esc(initials(it.name))+'</div>'
       + '<div class="nm">'+esc(it.name||'Anonymous')+'<small>tested the AI video app</small></div></div>'
+      + tags
       + '</div>';
   }
   function hash(s){ var h=0; s=String(s); for(var i=0;i<s.length;i++){ h=(h<<5)-h+s.charCodeAt(i); h|=0; } return h; }
+  function tagLabel(v){ var m={'iPhone':'📱 iPhone','Android':'🤖 Android','Upload video':'⬆️ Uploaded','Take video':'🎥 Recorded'}; return m[v]||v; }
 
   function render(animateNew){
     var grid = $('grid'), empty = $('empty'), counter = $('counter');
@@ -350,22 +382,41 @@
   }
 
   /* ---------------- form logic ---------------- */
+  var picks = { phone:'', option:'' };
+  function wireChoice(groupId, key, fieldId){
+    var g = $(groupId); if(!g) return;
+    var btns = g.querySelectorAll('.pill-opt');
+    for(var i=0;i<btns.length;i++){
+      btns[i].addEventListener('click', function(){
+        var all = g.querySelectorAll('.pill-opt');
+        for(var j=0;j<all.length;j++) all[j].classList.remove('sel');
+        this.classList.add('sel');
+        picks[key] = this.getAttribute('data-val');
+        $(fieldId).classList.remove('bad');
+      });
+    }
+  }
   function openForm(){ $('overlay').classList.remove('hide'); resetForm(); setTimeout(function(){$('loved').focus();},250); }
   function closeForm(){ $('overlay').classList.add('hide'); }
   function resetForm(){
     $('formView').style.display=''; $('doneView').style.display='none';
     $('loved').value=''; $('improve').value=''; $('name').value='';
+    picks.phone=''; picks.option='';
+    var sels=document.querySelectorAll('.pill-opt.sel'); for(var i=0;i<sels.length;i++) sels[i].classList.remove('sel');
     $('f-loved').classList.remove('bad'); $('f-name').classList.remove('bad');
+    $('f-phone').classList.remove('bad'); $('f-option').classList.remove('bad');
     $('sendBtn').disabled=false;
   }
   function submit(){
     var loved=$('loved').value.trim(), improve=$('improve').value.trim(), name=$('name').value.trim();
     var ok=true;
     if(!loved){ $('f-loved').classList.add('bad'); ok=false; } else $('f-loved').classList.remove('bad');
+    if(!picks.phone){ $('f-phone').classList.add('bad'); ok=false; } else $('f-phone').classList.remove('bad');
+    if(!picks.option){ $('f-option').classList.add('bad'); ok=false; } else $('f-option').classList.remove('bad');
     if(!name){ $('f-name').classList.add('bad'); ok=false; } else $('f-name').classList.remove('bad');
     if(!ok) return;
     $('sendBtn').disabled=true;
-    var rec={ts:Date.now(), loved:loved, improve:improve, name:name};
+    var rec={ts:Date.now(), loved:loved, improve:improve, name:name, phone:picks.phone, option:picks.option};
     addRecord(rec);
     burst(innerWidth/2, innerHeight*0.5, 140);
     var n = items.length;
@@ -383,6 +434,9 @@
       $('scanChip').style.display='flex';
     }
   }
+
+  wireChoice('c-phone','phone','f-phone');
+  wireChoice('c-option','option','f-option');
 
   if(MODE==='submit'){
     // PHONE: form only, full screen
@@ -435,18 +489,18 @@
   /* ---------------- export ---------------- */
   function rows(){
     return items.slice().reverse().map(function(it){
-      return [ new Date(it.ts).toLocaleString(), it.loved||'', it.improve||'', it.name||'' ];
+      return [ new Date(it.ts).toLocaleString(), it.loved||'', it.improve||'', it.name||'', it.phone||'', it.option||'' ];
     });
   }
   function exportCsv(){
-    var head=['Timestamp','What went well','What can be improved','Name'];
+    var head=['Timestamp','What went well','What can be improved','Name','Phone','Video option'];
     var data=[head].concat(rows());
     var csv=data.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
     var blob=new Blob([csv],{type:'text/csv'});
     var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='booth-feedback.csv'; a.click();
   }
   function copyTsv(){
-    var head=['Timestamp','What went well','What can be improved','Name'];
+    var head=['Timestamp','What went well','What can be improved','Name','Phone','Video option'];
     var data=[head].concat(rows());
     var tsv=data.map(function(r){return r.map(function(c){return String(c).replace(/\t/g,' ').replace(/\n/g,' ');}).join('\t');}).join('\n');
     (navigator.clipboard?navigator.clipboard.writeText(tsv):Promise.reject()).then(function(){
