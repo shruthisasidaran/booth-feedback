@@ -254,7 +254,11 @@
       ? location.search
       : (location.hash && location.hash.length > 1 ? '?' + location.hash.replace(/^#/, '') : '')
   );
-  var API  = params.get('api');                 // Apps Script /exec URL (multi-device) or null
+  // Public (no-login) backend deployed from a personal Google account. Used automatically in
+  // wall/submit modes so the QR + links stay short. Kiosk (no mode) stays offline on localStorage.
+  // An explicit ?api=… still overrides this.
+  var DEFAULT_API = 'https://script.google.com/macros/s/AKfycbzQI_Jule3VEX5bYma5m6lHBrMkW7df1RLH00seKgmfz-RIcanQDrmQYlKVfPYEZttw/exec';
+  var API  = params.get('api') || (params.get('mode') ? DEFAULT_API : '');
   var MODE = params.get('mode');                // 'wall' | 'submit' | null (kiosk)
   var STORE_KEY = 'booth_feedback_v1';
   var ACCENTS = [
@@ -429,7 +433,7 @@
   /* ---------------- wire up by mode ---------------- */
   function setupQR(){
     if(API && $('scanChip')){
-      var submitUrl = location.origin + location.pathname + '?mode=submit&api=' + encodeURIComponent(API);
+      var submitUrl = location.origin + location.pathname + '?mode=submit';
       $('qrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=0&data=' + encodeURIComponent(submitUrl);
       $('scanChip').style.display='flex';
     }
